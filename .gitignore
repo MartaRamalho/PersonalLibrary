@@ -4,7 +4,7 @@ build/
 *.log
 .env
 .env.local
-PROJECT_CONTEXT
+PROJECT_CONTEXT.md
 
 # SQLite database files
 *.sqlite

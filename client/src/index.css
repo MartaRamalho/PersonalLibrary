@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Self-hosted display + body serifs (see client/public/fonts). font-display:swap
+   keeps Georgia as the fallback until the woff2 files load. */
+@font-face {
+  font-family: "Playfair Display";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/playfair-display.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/lora.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/lora-italic.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: light;
+  --parchment: 245 239 225; /* page bg   #f5efe1 */
+  --surface: 251 247 236; /* card      #fbf7ec */
+  --ink: 43 33 23; /* text      #2b2117 */
+  --accent: 91 58 41; /* walnut    #5b3a29  primary buttons / active / links */
+  --brass: 176 141 87; /* #b08d57   stars, focus ring, small accents */
+  --oxblood: 124 45 45; /* #7c2d2d   book-spine accent, emphasis */
+  --walnut: 91 58 41; /* #5b3a29 */
+}
+
+.dark {
+  color-scheme: dark;
+  --parchment: 32 25 18; /* candlelit walnut-black page */
+  --surface: 45 35 25; /* raised card */
+  --ink: 238 228 210; /* warm cream text */
+  --accent: 197 165 116; /* brass reads as the accent on dark */
+  --brass: 201 170 120;
+  --oxblood: 176 74 66; /* lighter oxblood for contrast on dark */
+  --walnut: 120 86 54;
+}
+
+body {
+  margin: 0;
+  background: rgb(var(--parchment));
+  color: rgb(var(--ink));
+  font-family: "Lora", Georgia, Cambria, serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle scrollbar for the roulette / lists */
+* {
+  scrollbar-width: thin;
+}
+
+/* Visible warm focus ring in both themes (CLAUDE.md a11y rule) */
+:focus-visible {
+  outline: 2px solid rgb(var(--brass));
+  outline-offset: 2px;
+}
+
+@layer components {
+  /* Card surface — replaces the old translucent-white cards; flips with theme. */
+  .card {
+    @apply rounded-xl border border-ink/10 bg-surface p-4 shadow-card;
+  }
+  .card-hover {
+    @apply transition-colors hover:border-accent;
+  }
+  /* Book row with an oxblood spine down the left edge. */
+  .card-spine {
+    @apply rounded-xl border border-ink/10 border-l-4 border-l-oxblood bg-surface p-4 shadow-card;
+  }
+
+  .btn-primary {
+    @apply rounded-full bg-accent px-4 py-2 font-medium text-parchment transition-opacity hover:opacity-90 disabled:opacity-50;
+  }
+  .btn-outline {
+    @apply rounded-full border border-ink/20 px-4 py-2 transition-colors hover:border-accent;
+  }
+  /* Active "dark chip" toggle (ink fill, parchment text). */
+  .chip {
+    @apply rounded-full bg-ink px-3 py-1.5 text-parchment;
+  }
+
+  .pill-select {
+    @apply rounded-full border border-ink/20 bg-surface px-3 py-1.5 text-sm;
+  }
+  .tag {
+    @apply rounded-full bg-ink/5 px-2 py-0.5 text-xs text-ink/60;
+  }
+}
