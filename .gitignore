@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.local
+
+# SQLite database files
+*.sqlite
+*.sqlite3
+*.db
+server/data/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
