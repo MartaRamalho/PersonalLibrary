@@ -38,14 +38,16 @@ searchRouter.get("/", async (req, res) => {
     // title + first author — so books added via another source still show as
     // "in library" rather than looking new.
     const lib = db
-      .prepare("SELECT id, ol_key, isbn, title, authors FROM books")
+      .prepare("SELECT id, ol_key, isbn, title, authors, status FROM books")
       .all() as {
       id: number;
       ol_key: string;
       isbn: string | null;
       title: string;
       authors: string;
+      status: string;
     }[];
+    const byId = new Map(lib.map((b) => [b.id, b]));
     const byOlKey = new Map(lib.map((b) => [b.ol_key, b.id]));
     const byIsbn = new Map(
       lib.filter((b) => b.isbn).map((b) => [b.isbn as string, b.id]),
@@ -69,7 +71,10 @@ searchRouter.get("/", async (req, res) => {
     res.json({
       results: results.map((r) => {
         const id = matchId(r);
-        return { ...r, in_library: id != null, book_id: id };
+        // Auto-saved "seen" books (status='none') aren't on a shelf yet, so they
+        // still show as addable in results.
+        const shelved = id != null && byId.get(id)?.status !== "none";
+        return { ...r, in_library: shelved, book_id: id };
       }),
     });
   } catch (err) {

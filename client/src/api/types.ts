@@ -21,6 +21,17 @@ export interface Book {
   ratings_average: number | null;
   ratings_count: number | null;
   created_at: string;
+  last_viewed_at: string | null;
+}
+
+// Slim row returned by the DB search dropdown (GET /api/books/lookup).
+export interface BookLookupResult {
+  id: number;
+  title: string;
+  authors: string[];
+  cover_url: string | null;
+  custom_cover: string | null;
+  status: string;
 }
 
 export interface SearchResult {

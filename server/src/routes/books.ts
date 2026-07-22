@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, serializeBook, BookRow } from "../db.js";
-import { DEFAULT_SHELF, isValidShelf } from "../shelves.js";
+import { DEFAULT_SHELF, isValidShelf, UNSHELVED_STATUS } from "../shelves.js";
 import { applyStatus, syncReadingYear } from "../bookStatus.js";
 import { fetchDescription } from "../googlebooks.js";
 import { fetchWorkDescription } from "../openlibrary.js";
@@ -72,7 +72,8 @@ function normalizeRating(v: unknown): number | null {
   return Math.max(0, Math.min(5, Math.round(n * 2) / 2));
 }
 
-// GET /api/books?status=read  — the user's library (optionally one shelf)
+// GET /api/books?status=read  — the user's library (optionally one shelf).
+// The no-status branch excludes auto-saved "seen" books (status='none').
 booksRouter.get("/", (req, res) => {
   const status = req.query.status ? String(req.query.status) : null;
   const rows = (
@@ -82,9 +83,113 @@ booksRouter.get("/", (req, res) => {
             "SELECT * FROM books WHERE status = ? ORDER BY created_at DESC",
           )
           .all(status)
-      : db.prepare("SELECT * FROM books ORDER BY created_at DESC").all()
+      : db
+          .prepare(
+            "SELECT * FROM books WHERE status <> ? ORDER BY created_at DESC",
+          )
+          .all(UNSHELVED_STATUS)
   ) as BookRow[];
   res.json({ books: rows.map(serializeBook) });
+});
+
+// GET /api/books/lookup?q=  — autocomplete over books already in the DB (any
+// status, including auto-saved "seen" books). Used by the search dropdown.
+booksRouter.get("/lookup", (req, res) => {
+  const q = String(req.query.q ?? "")
+    .trim()
+    .toLowerCase();
+  if (!q) {
+    res.json({ results: [] });
+    return;
+  }
+  const like = `%${q}%`;
+  const rows = db
+    .prepare(
+      `SELECT id, title, authors, cover_url, custom_cover, status FROM books
+       WHERE lower(title) LIKE @like OR lower(authors) LIKE @like
+       ORDER BY title
+       LIMIT 8`,
+    )
+    .all({ like }) as {
+    id: number;
+    title: string;
+    authors: string;
+    cover_url: string | null;
+    custom_cover: string | null;
+    status: string;
+  }[];
+  res.json({
+    results: rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      authors: JSON.parse(r.authors || "[]") as string[],
+      cover_url: r.cover_url,
+      custom_cover: r.custom_cover,
+      status: r.status,
+    })),
+  });
+});
+
+// GET /api/books/recent-views?limit=  — auto-saved "seen" books, most recent first.
+booksRouter.get("/recent-views", (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 40);
+  const rows = db
+    .prepare(
+      `SELECT * FROM books WHERE status = ?
+       ORDER BY last_viewed_at DESC, created_at DESC LIMIT ?`,
+    )
+    .all(UNSHELVED_STATUS, limit) as BookRow[];
+  res.json({ books: rows.map(serializeBook) });
+});
+
+// POST /api/books/visit  — auto-save on open. Upserts by ol_key/isbn/title; a
+// brand-new book is stored unshelved (status='none'); an existing book keeps its
+// status. Either way `last_viewed_at` is bumped. No dedupe of already-saved books.
+booksRouter.post("/visit", async (req, res) => {
+  const b = req.body ?? {};
+  if (!b.ol_key || !b.title) {
+    res.status(400).json({ error: "ol_key and title are required" });
+    return;
+  }
+
+  const existing = findExistingBook(b);
+  if (existing) {
+    db.prepare(
+      "UPDATE books SET last_viewed_at = datetime('now') WHERE id = ?",
+    ).run(existing.id);
+    res.json({ book: serializeBook(getBookRow(existing.id)!), created: false });
+    return;
+  }
+
+  const description = await resolveDescription(b);
+  const info = db
+    .prepare(
+      `INSERT INTO books
+        (ol_key, title, authors, cover_url, publisher, first_publish_year, page_count, subjects, description, isbn,
+         owned_physical, owned_digital, status, ratings_average, ratings_count, last_viewed_at)
+       VALUES (@ol_key, @title, @authors, @cover_url, @publisher, @first_publish_year, @page_count, @subjects, @description, @isbn,
+         0, 0, @status, @ratings_average, @ratings_count, datetime('now'))`,
+    )
+    .run({
+      ol_key: b.ol_key,
+      title: b.title,
+      authors: JSON.stringify(b.authors ?? []),
+      cover_url: b.cover_url ?? null,
+      publisher: b.publisher ?? null,
+      first_publish_year: b.first_publish_year ?? null,
+      page_count: b.page_count ?? null,
+      subjects: JSON.stringify(b.subjects ?? []),
+      description,
+      isbn: b.isbn ?? null,
+      status: UNSHELVED_STATUS,
+      ratings_average:
+        typeof b.ratings_average === "number" ? b.ratings_average : null,
+      ratings_count:
+        typeof b.ratings_count === "number" ? b.ratings_count : null,
+    });
+
+  const id = Number(info.lastInsertRowid);
+  res.status(201).json({ book: serializeBook(getBookRow(id)!), created: true });
 });
 
 // GET /api/books/:id

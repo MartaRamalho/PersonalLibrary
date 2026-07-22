@@ -1,11 +1,16 @@
-import { FC, useEffect, useState } from "react";
+import { FC, useEffect, useRef, useState } from "react";
 import {
   Link,
   useLocation,
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import { useAddBook, useShelves, useWorkDescription } from "../../api/hooks";
+import {
+  useAddBook,
+  useShelves,
+  useVisitBook,
+  useWorkDescription,
+} from "../../api/hooks";
 import type { SearchResult } from "../../api/types";
 import { Cover } from "../../components/cover/Cover";
 import { CommunityScore } from "../../components/community-score/CommunityScore";
@@ -45,6 +50,28 @@ export const BookPreview: FC = () => {
       setShelf(shelvesData.default);
     }
   }, [shelvesData]);
+
+  // Auto-save on open: persist the book to the DB (unshelved) so it's searchable
+  // later, even if the user never adds it to a shelf. Fires once per book.
+  const visitBook = useVisitBook();
+  const visitedKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (result && visitedKey.current !== result.ol_key) {
+      visitedKey.current = result.ol_key;
+      visitBook.mutate({
+        ol_key: result.ol_key,
+        title: result.title,
+        authors: result.authors,
+        cover_url: result.cover_url,
+        isbn: result.isbn,
+        first_publish_year: result.first_publish_year,
+        page_count: result.page_count,
+        subjects: result.subjects,
+        ratings_average: result.ratings_average,
+        ratings_count: result.ratings_count,
+      });
+    }
+  }, [result, visitBook]);
 
   if (!result) {
     return (

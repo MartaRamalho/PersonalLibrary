@@ -1,6 +1,11 @@
-import { FC, useEffect, useState } from "react";
+import { FC, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useBook, useDeleteBook, useUpdateBook } from "../../api/hooks";
+import {
+  useBook,
+  useDeleteBook,
+  useUpdateBook,
+  useVisitBook,
+} from "../../api/hooks";
 import { Cover } from "../../components/cover/Cover";
 import { bookCoverSrc } from "../../components/cover/Cover.utils";
 import { CoverUpload } from "../../components/cover-upload/CoverUpload";
@@ -23,6 +28,18 @@ export const BookDetail: FC = () => {
   useEffect(() => {
     if (data?.book) setReview(data.book.review ?? "");
   }, [data?.book]);
+
+  // Opening a book counts as a "view" — bump its recency (keeps Recently viewed
+  // fresh). Fires once per book.
+  const visitBook = useVisitBook();
+  const visitedKey = useRef<string | null>(null);
+  useEffect(() => {
+    const b = data?.book;
+    if (b && visitedKey.current !== b.ol_key) {
+      visitedKey.current = b.ol_key;
+      visitBook.mutate({ ol_key: b.ol_key, title: b.title, authors: b.authors });
+    }
+  }, [data?.book, visitBook]);
 
   if (isLoading) return <p className="text-ink/50">Loading…</p>;
   if (!data) return <p className="text-ink/50">Book not found.</p>;
@@ -63,6 +80,12 @@ export const BookDetail: FC = () => {
             {book.page_count && <span>{book.page_count} pages</span>}
             {book.isbn && <span>ISBN {book.isbn}</span>}
           </div>
+
+          {book.status === "none" && (
+            <p className="text-sm text-ink/60">
+              Not in your library yet — pick a shelf to add it.
+            </p>
+          )}
 
           {/* Shelf + dates */}
           <div className="flex flex-wrap items-center gap-3">

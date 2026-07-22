@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import type {
   Book,
+  BookLookupResult,
   Genre,
   PickerFilters,
   ReadingEntry,
@@ -86,6 +87,29 @@ export const useBook = (id: number) => {
   });
 };
 
+// Live autocomplete over books already in the DB (for the search dropdown).
+export const useBookLookup = (query: string) => {
+  const q = query.trim();
+  return useQuery({
+    queryKey: ["lookup", q],
+    queryFn: () =>
+      api.get<{ results: BookLookupResult[] }>(
+        `/api/books/lookup?q=${encodeURIComponent(q)}`,
+      ),
+    enabled: q.length > 0,
+    staleTime: 30_000,
+  });
+};
+
+// Auto-saved "seen" books, most recently opened first (dashboard "Recently viewed").
+export const useRecentViews = (limit = 12) => {
+  return useQuery({
+    queryKey: ["recent-views"],
+    queryFn: () =>
+      api.get<{ books: Book[] }>(`/api/books/recent-views?limit=${limit}`),
+  });
+};
+
 const invalidateBookViews = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ["books"] });
   qc.invalidateQueries({ queryKey: ["shelf"] });
@@ -153,6 +177,33 @@ export const useRemoveCover = () => {
     onSuccess: (_data, id) => {
       invalidateBookViews(qc);
       qc.invalidateQueries({ queryKey: ["book", id] });
+    },
+  });
+};
+
+// Auto-save a book on open. Upserts by ol_key/isbn/title; new books are stored
+// unshelved and existing ones just have their "last viewed" bumped.
+export type VisitPayload = {
+  ol_key: string;
+  title: string;
+  authors?: string[];
+  cover_url?: string | null;
+  isbn?: string | null;
+  first_publish_year?: number | null;
+  page_count?: number | null;
+  subjects?: string[];
+  ratings_average?: number | null;
+  ratings_count?: number | null;
+};
+
+export const useVisitBook = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: VisitPayload) =>
+      api.post<{ book: Book; created: boolean }>("/api/books/visit", payload),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["recent-views"] });
+      qc.invalidateQueries({ queryKey: ["book", data.book.id] });
     },
   });
 };
@@ -231,17 +282,38 @@ export interface ImportSummary {
   by_shelf: Record<string, number>;
 }
 
+export interface ImportResult {
+  summary: ImportSummary;
+  library_total: number;
+  job_id: string;
+}
+
+export interface ImportEnrichStatus {
+  total: number;
+  enriched: number;
+  done: boolean;
+}
+
 export const useImportGoodreads = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (csv: string) =>
-      api.post<{ summary: ImportSummary; library_total: number }>(
-        "/api/import/goodreads",
-        { csv },
-      ),
+      api.post<ImportResult>("/api/import/goodreads", { csv }),
     onSuccess: () => {
       invalidateBookViews(qc);
       qc.invalidateQueries({ queryKey: ["genres"] });
     },
+  });
+};
+
+// Poll background enrichment progress for an import job until it's done.
+export const useImportStatus = (jobId: string | null) => {
+  return useQuery({
+    queryKey: ["import-status", jobId],
+    queryFn: () =>
+      api.get<ImportEnrichStatus>(`/api/import/goodreads/status/${jobId}`),
+    enabled: !!jobId,
+    refetchInterval: (query) =>
+      query.state.data && !query.state.data.done ? 1000 : false,
   });
 };

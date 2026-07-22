@@ -20,6 +20,10 @@ export const SHELVES: Shelf[] = [
 // The shelf a newly added book lands on by default.
 export const DEFAULT_SHELF = "to-read";
 
+// Sentinel status for a book that's been auto-saved on open ("seen") but not
+// placed on any shelf. Excluded from shelf/library/picker/genre views.
+export const UNSHELVED_STATUS = "none";
+
 // Special shelf keys that drive date + reading-year behaviour.
 export const READING_SHELF = "reading";
 export const READ_SHELF = "read";
