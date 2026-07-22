@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db, serializeBook, safeParse, BookRow } from "../db.js";
+import { UNSHELVED_STATUS } from "../shelves.js";
 
 export const pickerRouter = Router();
 export const genresRouter = Router();
@@ -21,6 +22,10 @@ pickerRouter.post("/candidates", (req, res) => {
 
   const where: string[] = [];
   const params: unknown[] = [];
+
+  // Never include auto-saved "seen" books in the picker pool.
+  where.push("b.status <> ?");
+  params.push(UNSHELVED_STATUS);
 
   // Source: restrict to the given shelves (empty/absent = whole library).
   if (f.statuses && f.statuses.length > 0) {
@@ -75,7 +80,9 @@ pickerRouter.post("/candidates", (req, res) => {
 
 // GET /api/genres  — distinct subjects across the library with counts (for filter UI).
 genresRouter.get("/", (_req, res) => {
-  const rows = db.prepare("SELECT subjects FROM books").all() as {
+  const rows = db
+    .prepare("SELECT subjects FROM books WHERE status <> ?")
+    .all(UNSHELVED_STATUS) as {
     subjects: string;
   }[];
   const counts = new Map<string, number>();

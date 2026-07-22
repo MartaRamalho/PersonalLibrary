@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, BookRow } from "../db.js";
 import { syncReadingYear } from "../bookStatus.js";
 import { isValidShelf, DEFAULT_SHELF } from "../shelves.js";
+import { getJob, startEnrichmentJob } from "../enrichment.js";
 
 export const importRouter = Router();
 
@@ -154,6 +155,9 @@ importRouter.post("/goodreads", (req, res) => {
   );
 
   const titleAuthorSeen = new Map<string, number>();
+  // Books to enrich from the APIs after import (those still on a bare
+  // `goodreads:` key — freshly inserted, or matched rows that were bare imports).
+  const enrichIds: number[] = [];
 
   const run = db.transaction(() => {
     for (const rec of records) {
@@ -266,6 +270,10 @@ importRouter.post("/goodreads", (req, res) => {
       titleAuthorSeen.set(taKey, bookId);
       summary.by_shelf[status] = (summary.by_shelf[status] ?? 0) + 1;
 
+      // Enrich books still on a bare Goodreads key (skip already search-added ones).
+      const currentOlKey = book ? book.ol_key : olKey;
+      if (currentOlKey.startsWith("goodreads:")) enrichIds.push(bookId);
+
       // Auto-add finished books to their reading year.
       if (status === "read") {
         const before = db
@@ -293,7 +301,21 @@ importRouter.post("/goodreads", (req, res) => {
   const total = (
     db.prepare("SELECT COUNT(*) AS c FROM books").get() as { c: number }
   ).c;
-  res.json({ summary, library_total: total });
+
+  // Kick off background API enrichment of the imported books.
+  const jobId = startEnrichmentJob([...new Set(enrichIds)]);
+
+  res.json({ summary, library_total: total, job_id: jobId });
+});
+
+// GET /api/import/goodreads/status/:jobId — poll background enrichment progress.
+importRouter.get("/goodreads/status/:jobId", (req, res) => {
+  const job = getJob(req.params.jobId);
+  if (!job) {
+    res.status(404).json({ error: "Unknown job" });
+    return;
+  }
+  res.json(job);
 });
 
 export { toRecords, cleanIsbn };

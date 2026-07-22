@@ -1,6 +1,6 @@
 import { FC } from "react";
 import { Link } from "react-router-dom";
-import { useLibrary, useShelves } from "../../api/hooks";
+import { useLibrary, useRecentViews, useShelves } from "../../api/hooks";
 import { Cover } from "../../components/cover/Cover";
 import { bookCoverSrc } from "../../components/cover/Cover.utils";
 
@@ -21,9 +21,11 @@ const Stat: FC<{ label: string; value: number; to: string }> = ({
 export const Dashboard = () => {
   const { data: lib } = useLibrary();
   const { data: shelvesData } = useShelves();
+  const { data: recentViews } = useRecentViews(8);
 
   const books = lib?.books ?? [];
   const recent = books.slice(0, 8);
+  const seen = recentViews?.books ?? [];
   const shelfCount = (key: string) =>
     shelvesData?.shelves.find((s) => s.key === key)?.count ?? 0;
 
@@ -61,6 +63,28 @@ export const Dashboard = () => {
           </h2>
           <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
             {recent.map((b) => (
+              <Link key={b.id} to={`/book/${b.id}`} title={b.title}>
+                <Cover
+                  url={bookCoverSrc(b)}
+                  title={b.title}
+                  className="w-full aspect-[2/3] rounded-md shadow-sm"
+                />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {seen.length > 0 && (
+        <section>
+          <h2 className="font-display text-xl font-semibold mb-1">
+            Recently viewed
+          </h2>
+          <p className="text-sm text-ink/50 mb-3">
+            Books you opened but haven’t added to a shelf yet.
+          </p>
+          <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
+            {seen.map((b) => (
               <Link key={b.id} to={`/book/${b.id}`} title={b.title}>
                 <Cover
                   url={bookCoverSrc(b)}

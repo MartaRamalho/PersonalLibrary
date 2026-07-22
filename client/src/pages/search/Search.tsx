@@ -5,11 +5,16 @@ import type { SearchResult } from "../../api/types";
 import { Cover } from "../../components/cover/Cover";
 import { ImportGoodreads } from "../../components/import-goodreads/ImportGoodreads";
 import { CommunityScore } from "../../components/community-score/CommunityScore";
+import { BookSearchCombobox } from "../../components/book-search-combobox/BookSearchCombobox";
 
 const ResultRow: FC<{ result: SearchResult }> = ({ result }) => {
   const addBook = useAddBook();
   const { data: shelvesData } = useShelves();
-  const [addedId, setAddedId] = useState<number | null>(result.book_id);
+  // Only treat as "already added" when it's actually on a shelf; a seen-but-
+  // unshelved book (in_library=false) stays addable even though it has a book_id.
+  const [addedId, setAddedId] = useState<number | null>(
+    result.in_library ? result.book_id : null,
+  );
   const [shelf, setShelf] = useState(shelvesData?.default ?? "to-read");
 
   const previewLink = {
@@ -129,12 +134,13 @@ export const Search: FC = () => {
         <label className="sr-only" htmlFor="book-search">
           Search books
         </label>
-        <input
+        <BookSearchCombobox
           id="book-search"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={setInput}
+          onSubmit={() => setQuery(input.trim())}
           placeholder="Search by title, author, ISBN…"
-          className="flex-1 rounded-full border border-ink/20 px-5 py-2.5 focus:outline-none focus:border-accent"
+          className="flex-1"
         />
         <button type="submit" className="btn-primary px-5 py-2.5">
           Search

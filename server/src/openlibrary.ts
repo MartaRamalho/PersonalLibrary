@@ -15,6 +15,7 @@ export interface NormalizedBook {
   isbn: string | null;
   ratings_average: number | null;
   ratings_count: number | null;
+  language: string[]; // MARC codes across editions, e.g. ["eng","jpn"]
 }
 
 interface OLSearchDoc {
@@ -29,6 +30,7 @@ interface OLSearchDoc {
   isbn?: string[];
   ratings_average?: number;
   ratings_count?: number;
+  language?: string[];
 }
 
 interface OLSearchResponse {
@@ -48,6 +50,7 @@ const FIELDS = [
   "isbn",
   "ratings_average",
   "ratings_count",
+  "language",
 ].join(",");
 
 function coverUrl(coverId?: number, isbn?: string | null): string | null {
@@ -74,6 +77,7 @@ function normalizeDoc(doc: OLSearchDoc): NormalizedBook {
         : null,
     ratings_count:
       typeof doc.ratings_count === "number" ? doc.ratings_count : null,
+    language: doc.language ?? [],
   };
 }
 
@@ -81,7 +85,7 @@ export async function searchBooks(
   query: string,
   limit = 20,
 ): Promise<NormalizedBook[]> {
-  const url = `${SEARCH_URL}?q=${encodeURIComponent(query)}&fields=${FIELDS}&limit=${limit}`;
+  const url = `${SEARCH_URL}?q=${encodeURIComponent(query)}&fields=${FIELDS}&limit=${limit}&mode=everything`;
   const res = await fetch(url, { headers: UA });
   if (!res.ok) {
     throw new Error(`Open Library search failed: ${res.status}`);

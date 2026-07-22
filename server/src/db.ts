@@ -56,8 +56,12 @@ db.exec(`
 const bookColumns = db.prepare("PRAGMA table_info(books)").all() as {
   name: string;
 }[];
-if (!bookColumns.some((c) => c.name === "custom_cover")) {
+const hasColumn = (name: string) => bookColumns.some((c) => c.name === name);
+if (!hasColumn("custom_cover")) {
   db.exec("ALTER TABLE books ADD COLUMN custom_cover TEXT"); // "<token>.<ext>" or null
+}
+if (!hasColumn("last_viewed_at")) {
+  db.exec("ALTER TABLE books ADD COLUMN last_viewed_at TEXT"); // ISO datetime of last open, or null
 }
 
 // ---- Row types -----------------------------------------------------------
@@ -85,6 +89,7 @@ export interface BookRow {
   ratings_average: number | null;
   ratings_count: number | null;
   created_at: string;
+  last_viewed_at: string | null;
 }
 
 export interface Book {
@@ -110,6 +115,7 @@ export interface Book {
   ratings_average: number | null;
   ratings_count: number | null;
   created_at: string;
+  last_viewed_at: string | null;
 }
 
 export function serializeBook(row: BookRow): Book {
@@ -136,6 +142,7 @@ export function serializeBook(row: BookRow): Book {
     ratings_average: row.ratings_average,
     ratings_count: row.ratings_count,
     created_at: row.created_at,
+    last_viewed_at: row.last_viewed_at,
   };
 }
 
